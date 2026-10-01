@@ -16,12 +16,21 @@ __all__ = [
     "get_offering", "get_prospect_record", "update_prospect_info",
     "fetch_engagement_history", "fetch_account_details", "fetch_tech_stack",
     "get_profile_from_db", "save_profile_to_db",
-    "get_rep",
+    "get_rep", "redact_prospect",
 ]
+
+SENSITIVE_FIELDS = ("billing_qualification",)
 
 # Built prospect profiles are cached in memory (keyed by prospect_id) so repeat
 # lookups within a run are served without rebuilding.
 _PROFILES = {}
+
+
+def redact_prospect(record):
+    "Return a prospect record without sensitive fields."
+    if isinstance(record, dict):
+        return {key: value for key, value in record.items() if key not in SENSITIVE_FIELDS}
+    return record
 
 # ---------------------------------------------------------------------------
 # Public data-access functions
@@ -63,13 +72,15 @@ def fetch_tech_stack(prospect_id):
 @traceable(run_type="tool", name="get_profile_from_db")
 def get_profile_from_db(prospect_id):
     "Look up a stored prospect profile. Returns {'prospect_profile': record|None}."
-    return {"prospect_profile": _PROFILES.get(prospect_id)}
+    profile = redact_prospect(_PROFILES.get(prospect_id))
+    _PROFILES[prospect_id] = profile
+    return {"prospect_profile": profile}
 
 
 @traceable(run_type="tool", name="save_profile_to_db")
 def save_profile_to_db(prospect_id, profile):
     "Persist a prospect profile to the profile store."
-    _PROFILES[prospect_id] = profile
+    _PROFILES[prospect_id] = redact_prospect(profile)
     return {"saved": True}
 
 def update_prospect_info(prospect_id, technology):
