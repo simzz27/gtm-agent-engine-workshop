@@ -68,13 +68,12 @@ def build_prospect_profile(prospect_id: str) -> dict:
 
 
 SCORING_PROMPT = (
-    "You are a GTM assistant. Score the prospect's potential for the offering from "
-    "1 to 100 based on how good a fit they are, weighing their annual revenue and "
-    "tech stack. In your justification, explicitly list which of the offering's required "
-    "technologies the prospect has and which required technologies they are missing, naming "
-    "each one. Any missing required technology must lower the tech_stack_match component and "
-    "the overall score. Return a score and a justification that reflects your "
-    "overall assessment of this prospect's potential."
+    "You are a GTM assistant. Score only the prospect fields and offering fields provided. "
+    "Return revenue_fit and tech_stack_match component scores from 0 to 100, plus a "
+    "justification. Do not invent additional rubric dimensions or score an overall total. "
+    "For tech_stack_match, explicitly list which of the offering's required technologies "
+    "the prospect has and which required technologies they are missing, naming each one. "
+    "Any missing required technology must lower the tech_stack_match component."
 )
 
 from typing import Literal
@@ -82,13 +81,10 @@ from typing import Literal
 class RubricBreakdown(BaseModel):
     revenue_fit: float
     tech_stack_match: float
-    segment_fit: float
     component_max: Literal[100] = 100
 
 
 class ProspectScore(BaseModel):
-    score: float
-    max_score: int = 100
     justification: str
     rubric_breakdown: RubricBreakdown
 
@@ -119,7 +115,13 @@ def score_prospect(prospect_profile: dict, offering: dict | None = None) -> dict
         {"role": "system", "content": SCORING_PROMPT},
         {"role": "user", "content": user},
     ])
-    return result.model_dump()
+    result_data = result.model_dump()
+    breakdown = result_data["rubric_breakdown"]
+    result_data["score"] = round(
+        0.5 * breakdown["revenue_fit"] + 0.5 * breakdown["tech_stack_match"], 1
+    )
+    result_data["max_score"] = 100
+    return result_data
 
 
 @tool
